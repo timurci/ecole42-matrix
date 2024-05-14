@@ -12,4 +12,7 @@ fn main() {
 
     v.add(&b);
     println!("v: {v} b: {b}");
+
+    v += &b;
+    println!("v: {v} b: {b}");
 }
