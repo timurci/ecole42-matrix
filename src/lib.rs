@@ -16,6 +16,8 @@ pub trait FieldBound:
     //+ ops::MulAssign
     //+ ops::DivAssign
     + for <'a> ops::AddAssign<&'a Self>
+    + for <'a> ops::SubAssign<&'a Self>
+    + for <'a> ops::MulAssign<&'a Self>
 {
 }
 
@@ -54,7 +56,7 @@ impl IncompatibleError {
 }
 
 pub trait VectorSpace {
-    type Field;
+    type Field: FieldBound;
 
     // Required functions
 

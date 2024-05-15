@@ -87,9 +87,66 @@ where
     }
 }
 
+impl<K> ops::SubAssign<&Self> for Vector<K>
+where
+    K: FieldBound,
+{
+    fn sub_assign(&mut self, rhs: &Self) {
+        self.force_eq_size(&rhs);
+
+        let mut v_iter = rhs.into_iter();
+        for i in &mut self.fields {
+            match v_iter.next() {
+                Some(k_ref) => *i -= k_ref,
+                None => {}
+            }
+        }
+    }
+}
+
+impl<K> ops::MulAssign<&Self> for Vector<K>
+where
+    K: FieldBound,
+{
+    fn mul_assign(&mut self, rhs: &Self) {
+        self.force_eq_size(&rhs);
+
+        let mut v_iter = rhs.into_iter();
+        for i in &mut self.fields {
+            match v_iter.next() {
+                Some(k_ref) => *i *= k_ref,
+                None => {}
+            }
+        }
+    }
+}
+
 impl<K: FieldBound> FieldBound for Vector<K> {}
 
+// Independent MulAssign Implementation
+
+impl<K> ops::MulAssign<&K> for Vector<K>
+where
+    K: FieldBound,
+{
+    fn mul_assign(&mut self, rhs: &K) {
+        for i in &mut self.fields {
+            *i *= rhs;
+        }
+    }
+}
+
+impl<K> ops::MulAssign<K> for Vector<K>
+where
+    K: FieldBound,
+{
+    fn mul_assign(&mut self, rhs: K) {
+        self.mul_assign(&rhs);
+    }
+}
+
 // VectorSpace Implementation
+
 impl<K: FieldBound> VectorSpace for Vector<K> {
     type Field = K;
 
@@ -102,11 +159,14 @@ impl<K: FieldBound> VectorSpace for Vector<K> {
     }
 
     fn add(&mut self, v: &Self) {
-        //self += v;
         *self += v;
     }
-    fn sub(&mut self, _v: &Self) {}
-    fn scl(&mut self, _a: K) {}
+    fn sub(&mut self, v: &Self) {
+        *self -= v;
+    }
+    fn scl(&mut self, a: K) {
+        *self *= a;
+    }
 }
 
 // Tests
@@ -118,29 +178,62 @@ mod tests {
 
     #[test]
     fn add() {
-        let mut t1 = Vector::from(vec![1., 2., 3.]);
-        let mut t2 = Vector::from([0., -2., 1000., 45.2].as_slice());
-        let o1 = Vector::from(vec![-5., 3.5, 0.]);
-        let o2 = Vector::from(vec![1., 1., 1., 1.]);
+        let mut t1 = Vector::from(vec![1, 2, 3]);
+        let mut t2 = Vector::from([0, -2, 1000, 45].as_slice());
+        let o1 = Vector::from(vec![-5, 3, 0]);
+        let o2 = Vector::from(vec![1, 1, 1, 1]);
 
         t1.add(&o1);
         t2.add(&o2);
 
-        assert_eq!(t1, Vector::from(vec![-4., 5.5, 3.]));
-        assert_eq!(t2, Vector::from(vec![1., -1., 1001., 46.2]));
+        assert_eq!(t1, Vector::from(vec![-4, 5, 3]));
+        assert_eq!(t2, Vector::from(vec![1, -1, 1001, 46]));
 
         t1 += &o1;
         t2.add(&o2);
 
-        assert_eq!(t1, Vector::from(vec![-9., 9., 3.]));
-        assert_eq!(t2, Vector::from(vec![2., 0., 1002., 47.2]));
+        assert_eq!(t1, Vector::from(vec![-9, 8, 3]));
+        assert_eq!(t2, Vector::from(vec![2, 0, 1002, 47]));
+    }
+
+    #[test]
+    fn sub() {
+        let mut t1 = Vector::from(vec![-9, 9, 3]);
+        let o1 = Vector::from(vec![-5, 3, 0]);
+
+        t1.sub(&o1);
+        assert_eq!(t1, Vector::from(vec![-4, 6, 3]));
+
+        t1 -= &o1;
+        assert_eq!(t1, Vector::from(vec![1, 3, 3]));
+    }
+
+    #[test]
+    fn vector_multiplication() {
+        let mut t1 = Vector::from(vec![1, 2, 3]);
+        let o1 = Vector::from(vec![-5, 3, 21]);
+
+        t1 *= &o1;
+        assert_eq!(t1, Vector::from(vec![-5, 6, 63]));
+    }
+
+    #[test]
+    fn scalar_multiplication() {
+        let mut t1 = Vector::from(vec![1, 2, 3]);
+        let s1 = 25;
+
+        t1 *= s1;
+        assert_eq!(t1, Vector::from(vec![25, 50, 75]));
+
+        t1.scl(s1);
+        assert_eq!(t1, Vector::from(vec![625, 1250, 1875]));
     }
 
     #[test]
     fn check_compatibility() {
-        let t1 = Vector::from(vec![1., 2., 3.]);
-        let t2 = Vector::from(vec![0., -2., 1000., 45.2]);
-        let t3 = Vector::from(vec![100., -32932.3, 42124.6, 0.]);
+        let t1 = Vector::from(vec![1, 2, 3]);
+        let t2 = Vector::from(vec![0, -2, 1000, 45]);
+        let t3 = Vector::from(vec![100, -32932, 42124, 0]);
 
         assert!(t1.eq_size_compatible(&t2).is_err());
         assert!(matches!(t3.eq_shape_compatible(&t2), Ok(_)));
@@ -149,8 +242,8 @@ mod tests {
     #[test]
     #[should_panic]
     fn force_compatibility() {
-        let t1 = Vector::from(vec![1., 2., 3.]);
-        let t2 = Vector::from(vec![0., -2., 1000., 45.2]);
+        let t1 = Vector::from(vec![1, 2, 3]);
+        let t2 = Vector::from(vec![0, -2, 1000, 45]);
 
         t1.force_eq_size(&t2);
     }
