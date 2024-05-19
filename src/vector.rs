@@ -52,6 +52,19 @@ impl<K: FieldBound> PartialEq for Vector<K> {
     }
 }
 
+impl<K: FieldBound> ops::Index<usize> for Vector<K> {
+    type Output = K;
+    fn index(&self, i: usize) -> &K {
+        &self.fields[i]
+    }
+}
+
+impl<K: FieldBound> ops::IndexMut<usize> for Vector<K> {
+    fn index_mut(&mut self, i: usize) -> &mut K {
+        &mut self.fields[i]
+    }
+}
+
 impl<K: fmt::Display + FieldBound> fmt::Display for Vector<K> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut content = String::from("[");
@@ -177,7 +190,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn add() {
+    fn add_test() {
         let mut t1 = Vector::from(vec![1, 2, 3]);
         let mut t2 = Vector::from([0, -2, 1000, 45].as_slice());
         let o1 = Vector::from(vec![-5, 3, 0]);
@@ -197,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn sub() {
+    fn sub_test() {
         let mut t1 = Vector::from(vec![-9, 9, 3]);
         let o1 = Vector::from(vec![-5, 3, 0]);
 
@@ -209,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn vector_multiplication() {
+    fn vector_multiplication_test() {
         let mut t1 = Vector::from(vec![1, 2, 3]);
         let o1 = Vector::from(vec![-5, 3, 21]);
 
@@ -218,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn scalar_multiplication() {
+    fn scalar_multiplication_test() {
         let mut t1 = Vector::from(vec![1, 2, 3]);
         let s1 = 25;
 
@@ -230,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn check_compatibility() {
+    fn check_compatibility_test() {
         let t1 = Vector::from(vec![1, 2, 3]);
         let t2 = Vector::from(vec![0, -2, 1000, 45]);
         let t3 = Vector::from(vec![100, -32932, 42124, 0]);
@@ -241,7 +254,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn force_compatibility() {
+    fn force_compatibility_test() {
         let t1 = Vector::from(vec![1, 2, 3]);
         let t2 = Vector::from(vec![0, -2, 1000, 45]);
 
