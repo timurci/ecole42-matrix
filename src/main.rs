@@ -1,11 +1,10 @@
 use matrix::matrix::matrix;
-use matrix::matrix::Matrix; // Needed to be able to use matrix! macro
-use matrix::vector::Vector;
+use matrix::vector::vector;
 use matrix::VectorSpace; // Needed to be able to use trait methods
 
 fn main() {
-    let mut v = Vector::from(vec![1., 2.5, 2.]);
-    let b = Vector::from(vec![2., -2., 4.]);
+    let mut v = vector![1., 2.5, 2.];
+    let b = vector![2., -2., 4.];
     println!("{v}");
 
     for i in &v {
@@ -18,6 +17,18 @@ fn main() {
     v += &b;
     println!("v: {v} b: {b}");
 
-    let m = matrix![[1, 2, 3], [7, 8, 9], [10, 110, 12], [20, 25, 26]];
+    let mut m = matrix![
+        [1., 2., 3.],
+        [7., 8., 9.],
+        [10., 110., 12.],
+        [20.65, 25.11, 26.2]
+    ];
+    let c = matrix![5.; 4,3];
     println!("\nmatrix display:\n{m}");
+
+    m.add(&c);
+    println!("m:\n{m}\nc:\n{c}");
+
+    m.scl(-0.5);
+    println!("m:\n{m}\nscl: -0.5");
 }

@@ -11,6 +11,18 @@ pub struct Vector<K: FieldBound> {
     fields: Vec<K>,
 }
 
+#[macro_export]
+macro_rules! vector {
+    ($($e:expr),+) => {
+        $crate::vector::Vector::from(vec![$($e),+])
+    };
+
+    ($e:expr; $c:expr) => {
+        $crate::vector::Vector::from(vec![$e; $c])
+    }
+}
+pub use vector;
+
 impl<K: FieldBound> From<&[K]> for Vector<K> {
     fn from(content: &[K]) -> Vector<K> {
         Vector {
@@ -32,12 +44,12 @@ impl<'a, K: FieldBound> IntoIterator for &'a Vector<K> {
     type IntoIter = slice::Iter<'a, K>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.fields.iter()
+        self.iter()
     }
 }
 
-/* // Mutable ref iterator
-impl<'a, K> IntoIterator for &'a mut Vector<K> {
+// Mutable ref iterator
+impl<'a, K: FieldBound> IntoIterator for &'a mut Vector<K> {
     type Item = &'a mut K;
     type IntoIter = slice::IterMut<'a, K>;
 
@@ -45,7 +57,6 @@ impl<'a, K> IntoIterator for &'a mut Vector<K> {
         self.fields.iter_mut()
     }
 }
-*/
 
 impl<K: FieldBound> PartialEq for Vector<K> {
     fn eq(&self, other: &Self) -> bool {
@@ -189,6 +200,10 @@ impl<K: FieldBound> Vector<K> {
     pub fn len(&self) -> usize {
         self.size()
     }
+
+    pub fn iter(&self) -> slice::Iter<'_, K> {
+        self.fields.iter()
+    }
 }
 
 // Tests
@@ -197,6 +212,25 @@ impl<K: FieldBound> Vector<K> {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn vector_macro_test() {
+        let v1 = vector![1, 5, -2, 3];
+        let v2 = vector![924; 5];
+
+        assert_eq!(
+            v1,
+            Vector {
+                fields: vec![1, 5, -2, 3]
+            }
+        );
+        assert_eq!(
+            v2,
+            Vector {
+                fields: vec![924, 924, 924, 924, 924]
+            }
+        );
+    }
 
     #[test]
     fn add_test() {

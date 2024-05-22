@@ -6,10 +6,12 @@ use super::D2;
 use super::vector::Vector;
 
 use std::fmt;
+use std::ops;
+use std::slice;
 
 #[derive(Debug, Clone)]
 pub struct Matrix<K: FieldBound> {
-    vectors: Vector<Vector<K>>,
+    vectors: Vector<Vector<K>>, // columns
 }
 
 fn perfect_square_root(length: usize) -> Option<usize> {
@@ -43,10 +45,10 @@ macro_rules! matrix {
 
     ($([$($e:expr),+]),+) => {
         {
-            let mut m = Matrix::from(
-                Vector::from(vec![
+            let mut m = $crate::matrix::Matrix::from(
+                $crate::vector::Vector::from(vec![
                     $(
-                        Vector::from(vec![$($e),+]),
+                        $crate::vector::Vector::from(vec![$($e),+]),
                     )+]
                 )
             );
@@ -60,6 +62,28 @@ macro_rules! matrix {
          {
              Matrix::from([$($e),+].as_slice())
          }
+    };
+
+    ($e:expr; $c:expr) => {
+        {
+            $crate::matrix::Matrix::from(
+                $crate::vector::vector![
+                    $crate::vector::vector![$e; $c];
+                    $c
+                ]
+            )
+        }
+    };
+
+    ($e: expr; $r:expr, $c:expr) => {
+        {
+            $crate::matrix::Matrix::from(
+                $crate::vector::vector![
+                    $crate::vector::vector![$e; $r];
+                    $c
+                ]
+            )
+        }
     }
 }
 pub use matrix;
@@ -112,6 +136,15 @@ impl<K: FieldBound> From<Vector<Vector<K>>> for Matrix<K> {
     }
 }
 
+impl<'a, K: FieldBound> IntoIterator for &'a Matrix<K> {
+    type Item = &'a Vector<K>;
+    type IntoIter = slice::Iter<'a, Vector<K>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.vectors.iter()
+    }
+}
+
 impl<K: FieldBound> PartialEq for Matrix<K> {
     fn eq(&self, other: &Self) -> bool {
         self.vectors == other.vectors
@@ -154,6 +187,51 @@ impl<K: fmt::Display + FieldBound> fmt::Display for Matrix<K> {
     }
 }
 
+// MathAssign Implementations
+
+impl<K: FieldBound> ops::AddAssign<&Self> for Matrix<K> {
+    fn add_assign(&mut self, rhs: &Self) {
+        self.force_eq_shape(&rhs);
+
+        let mut m_iter = rhs.into_iter();
+        for col in &mut self.vectors {
+            match m_iter.next() {
+                Some(v_ref) => *col += v_ref,
+                None => {}
+            }
+        }
+    }
+}
+
+impl<K: FieldBound> ops::SubAssign<&Self> for Matrix<K> {
+    fn sub_assign(&mut self, rhs: &Self) {
+        self.force_eq_shape(&rhs);
+
+        let mut m_iter = rhs.into_iter();
+        for col in &mut self.vectors {
+            match m_iter.next() {
+                Some(v_ref) => *col -= v_ref,
+                None => {}
+            }
+        }
+    }
+}
+
+impl<K: FieldBound> ops::MulAssign<&K> for Matrix<K> {
+    fn mul_assign(&mut self, rhs: &K) {
+        for col in &mut self.vectors {
+            *col *= rhs;
+        }
+    }
+}
+
+impl<K: FieldBound> ops::MulAssign<K> for Matrix<K> {
+    fn mul_assign(&mut self, rhs: K) {
+        self.mul_assign(&rhs);
+    }
+}
+
+// VectorSpace Implementation
 impl<K: FieldBound> VectorSpace for Matrix<K> {
     type Field = K;
 
@@ -171,11 +249,17 @@ impl<K: FieldBound> VectorSpace for Matrix<K> {
         }
     }
 
-    fn add(&mut self, _v: &Self) {}
+    fn add(&mut self, v: &Self) {
+        *self += v;
+    }
 
-    fn sub(&mut self, _v: &Self) {}
+    fn sub(&mut self, v: &Self) {
+        *self -= v;
+    }
 
-    fn scl(&mut self, _a: K) {}
+    fn scl(&mut self, a: K) {
+        *self *= a;
+    }
 }
 
 impl<K: FieldBound> Matrix<K> {
@@ -201,6 +285,8 @@ mod tests {
     fn matrix_macro_test() {
         let m1 = matrix![[1, 2, 3], [4, 5, 6]];
         let m2 = matrix![1, 2, 3, 4];
+        let m3 = matrix![-1; 2];
+        let m4 = matrix![0; 3, 2];
 
         assert_eq!(
             m1,
@@ -219,6 +305,25 @@ mod tests {
                 vectors: Vector::from(vec![Vector::from(vec![1, 3]), Vector::from(vec![2, 4]),])
             }
         );
+
+        assert_eq!(
+            m3,
+            Matrix {
+                vectors: Vector::from(
+                    vec![Vector::from(vec![-1, -1]), Vector::from(vec![-1, -1]),]
+                )
+            }
+        );
+
+        assert_eq!(
+            m4,
+            Matrix {
+                vectors: Vector::from(vec![
+                    Vector::from(vec![0, 0, 0]),
+                    Vector::from(vec![0, 0, 0])
+                ])
+            }
+        )
     }
 
     #[test]
@@ -249,9 +354,9 @@ mod tests {
         let m3: Matrix<i32> =
             Matrix::from([Vector::from(vec![1, 2, 3]), Vector::from(vec![3, 4, 5])].as_slice());
 
-        assert_eq!(m1.shape(), Dimension::D2(2, 2));
-        assert_eq!(m2.shape(), Dimension::D2(3, 3));
-        assert_eq!(m3.shape(), Dimension::D2(2, 3));
+        assert_eq!(m1.shape(), Dimension::D2(D2 { rows: 2, cols: 2 }));
+        assert_eq!(m2.shape(), Dimension::D2(D2 { rows: 3, cols: 3 }));
+        assert_eq!(m3.shape(), Dimension::D2(D2 { rows: 2, cols: 3 }));
     }
 
     #[test]
@@ -261,5 +366,46 @@ mod tests {
 
         assert_eq!(m1.size(), 4);
         assert_eq!(m2.size(), 9);
+    }
+
+    #[test]
+    fn add_test() {
+        let mut m1 = matrix![1, 2, 3, 4];
+        let mut m2 = matrix![[3], [4], [7]];
+        let m3 = matrix![2, 2, 2, 2];
+        let m4 = matrix![[-1], [3], [0]];
+
+        m1.add(&m3);
+        m2.add(&m4);
+
+        assert_eq!(m1, matrix![1 + 2, 2 + 2, 3 + 2, 4 + 2]);
+        assert_eq!(m2, matrix![[3 + -1], [4 + 3], [7 + 0]]);
+    }
+
+    #[test]
+    fn sub_test() {
+        let mut m1 = matrix![1, 2, 3, 4];
+        let mut m2 = matrix![[3], [4], [7]];
+        let m3 = matrix![2, 2, 2, 2];
+        let m4 = matrix![[-1], [3], [0]];
+
+        m1.sub(&m3);
+        m2.sub(&m4);
+
+        assert_eq!(m1, matrix![1 - 2, 2 - 2, 3 - 2, 4 - 2]);
+        assert_eq!(m2, matrix![[3 - -1], [4 - 3], [7 - 0]]);
+    }
+
+    #[test]
+    fn scl_test() {
+        let mut m1 = matrix![1, 2, 3, 4];
+        let mut m2 = matrix![[3], [4], [7]];
+        let a1 = 2;
+
+        m1.scl(a1);
+        m2.scl(a1);
+
+        assert_eq!(m1, matrix![1 * a1, 2 * a1, 3 * a1, 4 * a1]);
+        assert_eq!(m2, matrix![[3 * a1], [4 * a1], [7 * a1]]);
     }
 }
