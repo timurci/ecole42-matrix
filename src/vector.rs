@@ -1,6 +1,7 @@
 use super::Dimension;
 use super::FieldBound;
 use super::VectorSpace;
+use super::D1;
 use std::fmt;
 use std::ops;
 use std::slice;
@@ -164,7 +165,9 @@ impl<K: FieldBound> VectorSpace for Vector<K> {
     type Field = K;
 
     fn shape(&self) -> Dimension {
-        Dimension::D1(self.fields.len())
+        Dimension::D1(D1 {
+            length: self.fields.len(),
+        })
     }
 
     fn size(&self) -> usize {
@@ -179,6 +182,12 @@ impl<K: FieldBound> VectorSpace for Vector<K> {
     }
     fn scl(&mut self, a: K) {
         *self *= a;
+    }
+}
+
+impl<K: FieldBound> Vector<K> {
+    pub fn len(&self) -> usize {
+        self.size()
     }
 }
 

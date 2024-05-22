@@ -1,3 +1,5 @@
+use matrix::matrix::matrix;
+use matrix::matrix::Matrix; // Needed to be able to use matrix! macro
 use matrix::vector::Vector;
 use matrix::VectorSpace; // Needed to be able to use trait methods
 
@@ -15,4 +17,7 @@ fn main() {
 
     v += &b;
     println!("v: {v} b: {b}");
+
+    let m = matrix![[1, 2, 3], [7, 8, 9], [10, 110, 12], [20, 25, 26]];
+    println!("\nmatrix display:\n{m}");
 }

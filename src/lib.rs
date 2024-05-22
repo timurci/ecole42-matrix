@@ -30,10 +30,38 @@ impl FieldBound for i64 {}
 impl FieldBound for i128 {}
 impl FieldBound for isize {}
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
+pub struct D1 {
+    length: usize,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct D2 {
+    rows: usize,
+    cols: usize,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Dimension {
-    D1(usize),
-    D2(usize, usize),
+    D1(D1),
+    D2(D2),
+}
+
+impl Dimension {
+    #[allow(dead_code)]
+    fn d1(self) -> Option<D1> {
+        match self {
+            Dimension::D1(d) => Some(d),
+            Dimension::D2(_) => None,
+        }
+    }
+
+    fn d2(self) -> Option<D2> {
+        match self {
+            Dimension::D1(_) => None,
+            Dimension::D2(d) => Some(d),
+        }
+    }
 }
 
 #[derive(Debug)]
