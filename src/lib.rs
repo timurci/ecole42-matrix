@@ -6,6 +6,7 @@ use std::ops;
 pub trait FieldBound:
     Clone
     + PartialEq
+    + PartialOrd
     //+ ops::Add
     //+ ops::Sub
     //+ ops::Mul
@@ -18,6 +19,7 @@ pub trait FieldBound:
     + for <'a> ops::AddAssign<&'a Self>
     + for <'a> ops::SubAssign<&'a Self>
     + for <'a> ops::MulAssign<&'a Self>
+    + for <'a> ops::DivAssign<&'a Self>
 {
 }
 

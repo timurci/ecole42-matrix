@@ -6,7 +6,7 @@ use std::fmt;
 use std::ops;
 use std::slice;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Vector<K: FieldBound> {
     fields: Vec<K>,
 }
@@ -55,12 +55,6 @@ impl<'a, K: FieldBound> IntoIterator for &'a mut Vector<K> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.fields.iter_mut()
-    }
-}
-
-impl<K: FieldBound> PartialEq for Vector<K> {
-    fn eq(&self, other: &Self) -> bool {
-        self.fields == other.fields
     }
 }
 
@@ -146,6 +140,23 @@ where
     }
 }
 
+impl<K> ops::DivAssign<&Self> for Vector<K>
+where
+    K: FieldBound,
+{
+    fn div_assign(&mut self, rhs: &Self) {
+        self.force_eq_size(&rhs);
+
+        let mut v_iter = rhs.into_iter();
+        for i in &mut self.fields {
+            match v_iter.next() {
+                Some(k_ref) => *i *= k_ref,
+                None => {}
+            }
+        }
+    }
+}
+
 impl<K: FieldBound> FieldBound for Vector<K> {}
 
 // Independent MulAssign Implementation
@@ -204,7 +215,162 @@ impl<K: FieldBound> Vector<K> {
     pub fn iter(&self) -> slice::Iter<'_, K> {
         self.fields.iter()
     }
+
+    pub fn sum(&self) -> K {
+        let mut sum: K = self.fields[0].clone();
+
+        for i in 1..self.len() {
+            sum += &self.fields[i];
+        }
+
+        sum
+    }
+
+    pub fn sqsum(&self) -> K {
+        let mut sqsum: K = self.fields[0].clone();
+        sqsum *= &sqsum.clone();
+
+        for i in 1..self.len() {
+            let mut field = self.fields[i].clone();
+            field *= &field.clone();
+            sqsum += &field;
+        }
+
+        sqsum
+    }
+
+    pub fn dot(&self, v: &Vector<K>) -> K {
+        let mut c = self.clone();
+        c *= v;
+        c.sum()
+    }
 }
+
+// TODO: Consider moving previous functions into macros
+
+macro_rules! norm_impl {
+    ($($t:ty) +, float) => {
+        $(
+            impl Vector<$t> {
+                pub fn norm(&self) -> $t {
+                    self.sqsum().sqrt()
+                }
+
+                pub fn norm_inf(&self) -> $t {
+                    let mut max = self.fields[0].abs();
+
+                    for field in self {
+                        if field.abs() > max {
+                            max = field.abs();
+                        }
+                    }
+
+                    max
+                }
+            }
+        )+
+    };
+
+    ($($t:ty) +, integer) => {
+        $(
+            impl Vector<$t> {
+                pub fn norm(&self) -> $t {
+                    let sqsum = self.sqsum();
+                    (sqsum as f64).sqrt() as $t
+                }
+
+                pub fn norm_inf(&self) -> $t {
+                    let mut max = self.fields[0].abs();
+
+                    for field in self {
+                        if field.abs() > max {
+                            max = field.abs();
+                        }
+                    }
+
+                    max
+                }
+            }
+        )+
+    }
+}
+
+norm_impl!(f32 f64, float);
+norm_impl!(i8 i16 i32 i64 i128 isize, integer);
+
+macro_rules! norm_1_impl {
+    ($($t:ty) +) => {
+        $(
+            impl Vector<$t> {
+                pub fn norm_1(&self) -> $t {
+                    let mut sum = self.fields[0].clone().abs();
+
+                    for i in 1..self.len() {
+                        sum += self.fields[i].abs();
+                    }
+
+                    sum
+                }
+            }
+        )+
+    };
+}
+
+norm_1_impl!(f32 f64 i8 i16 i32 i64 i128 isize);
+
+// Function Declarations
+
+#[allow(dead_code)]
+pub fn linear_combination<K>(u: &[Vector<K>], coefs: &[K]) -> Vector<K>
+where
+    K: FieldBound,
+{
+    let mut vsum = u[0].clone();
+
+    vsum *= &coefs[0];
+
+    for i in 1..u.len() {
+        let mut v = u[i].clone();
+
+        v *= &coefs[i];
+        vsum.add(&v);
+    }
+
+    vsum
+}
+
+#[allow(dead_code)]
+pub fn lerp<K>(u: &Vector<K>, v: &Vector<K>, t: K) -> Vector<K>
+where
+    K: FieldBound,
+{
+    let mut slide = v.clone();
+    slide.sub(&u);
+    slide.scl(t);
+
+    let mut interp = u.clone();
+    interp.add(&slide);
+
+    interp
+}
+
+/*
+   TODO: consider using num crate to be able to declare functions outside of
+         impl block
+*/
+/*
+#[allow(dead_code)]
+pub fn angle_cos<K>(u: &Vector<K>, v: &Vector<K>) -> K
+where
+    K: FieldBound,
+{
+    let mut acos = u.dot(v);
+    acos /= &u.norm();
+    acos /= &v.norm();
+
+    acos
+}
+*/
 
 // Tests
 
@@ -293,6 +459,56 @@ mod tests {
 
         assert!(t1.eq_size_compatible(&t2).is_err());
         assert!(matches!(t3.eq_shape_compatible(&t2), Ok(_)));
+    }
+
+    #[test]
+    fn linear_combination_test() {
+        let v1 = vector![1, 2, 3];
+        let v2 = vector![0, 10, -100];
+
+        assert_eq!(
+            vector![10, 0, 230],
+            linear_combination([v1, v2].as_slice(), [10, -2].as_slice())
+        )
+    }
+
+    #[test]
+    fn lerp_test() {
+        let interp = lerp(&vector![2., 1.], &vector![4., 2.], 0.3);
+
+        assert!(interp > vector![2.5, 1.2]);
+        assert!(interp < vector![2.7, 1.4]);
+    }
+
+    #[test]
+    fn dot_test() {
+        assert_eq!(vector![-1, 6].dot(&vector![3, 2]), 9);
+    }
+
+    #[test]
+    fn norm_1_test() {
+        let v1: Vector<i32> = vector![1, 2, 3];
+        let v2: Vector<i16> = vector![-1, -2];
+
+        assert_eq!(v1.norm_1(), 6);
+        assert_eq!(v2.norm_1(), 3);
+    }
+
+    #[test]
+    fn norm_test() {
+        let v1: Vector<f32> = vector![1., 2., 3.];
+
+        assert!(v1.norm() > 3.740);
+        assert!(v1.norm() < 3.742);
+    }
+
+    #[test]
+    fn norm_inf_test() {
+        let v1: Vector<i32> = vector![1, 2, 3];
+        let v2: Vector<i16> = vector![-1, -2];
+
+        assert_eq!(v1.norm_inf(), 3);
+        assert_eq!(v2.norm_inf(), 2);
     }
 
     #[test]
