@@ -3,10 +3,15 @@ use std::fmt;
 use std::fmt::Write;
 use std::ops;
 
+use num_integer::Roots;
+use num_traits::float::Float;
+use num_traits::sign::Signed;
+
 pub trait FieldBound:
     Clone
     + PartialEq
     + PartialOrd
+    + ops::Neg<Output = Self>
     //+ ops::Add
     //+ ops::Sub
     //+ ops::Mul
@@ -21,16 +26,42 @@ pub trait FieldBound:
     + for <'a> ops::MulAssign<&'a Self>
     + for <'a> ops::DivAssign<&'a Self>
 {
+    fn abs(&self) -> Self;
+    fn sqrt(&self) -> Self;
 }
 
-impl FieldBound for f32 {}
-impl FieldBound for f64 {}
-impl FieldBound for i8 {}
-impl FieldBound for i16 {}
-impl FieldBound for i32 {}
-impl FieldBound for i64 {}
-impl FieldBound for i128 {}
-impl FieldBound for isize {}
+macro_rules! impl_fbound_required {
+    ($($t:ty) +, float) => {
+        $(
+            impl FieldBound for $t {
+                fn abs(&self) -> Self {
+                    Signed::abs(self)
+                }
+
+                fn sqrt(&self) -> Self {
+                    Float::sqrt(self.clone())
+                }
+            }
+        )+
+    };
+
+    ($($t:ty) +, integer) => {
+        $(
+            impl FieldBound for $t {
+                fn abs(&self) -> Self {
+                    Signed::abs(self)
+                }
+
+                fn  sqrt(&self) -> Self {
+                    Roots::sqrt(self)
+                }
+            }
+        )+
+    }
+}
+
+impl_fbound_required!(f32 f64, float);
+impl_fbound_required!(i8 i16 i32 i64 i128 isize, integer);
 
 #[derive(Debug, PartialEq)]
 pub struct D1 {
@@ -100,6 +131,13 @@ pub trait VectorSpace {
     fn add(&mut self, v: &Self);
     fn sub(&mut self, v: &Self);
     fn scl(&mut self, a: Self::Field);
+
+    fn sum(&self) -> Self::Field;
+    fn sqsum(&self) -> Self::Field;
+
+    fn norm_inf(&self) -> Self::Field;
+    fn norm_1(&self) -> Self::Field;
+    fn norm(&self) -> Self::Field;
 
     // Provided functions
 

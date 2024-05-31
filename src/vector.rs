@@ -6,7 +6,7 @@ use std::fmt;
 use std::ops;
 use std::slice;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Vector<K: FieldBound> {
     fields: Vec<K>,
 }
@@ -48,7 +48,6 @@ impl<'a, K: FieldBound> IntoIterator for &'a Vector<K> {
     }
 }
 
-// Mutable ref iterator
 impl<'a, K: FieldBound> IntoIterator for &'a mut Vector<K> {
     type Item = &'a mut K;
     type IntoIter = slice::IterMut<'a, K>;
@@ -88,6 +87,31 @@ impl<K: fmt::Display + FieldBound> fmt::Display for Vector<K> {
 }
 
 // FieldBound Implementation
+
+impl<K> std::cmp::PartialOrd for Vector<K>
+where
+    K: FieldBound,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.norm().partial_cmp(&other.norm())
+    }
+}
+
+impl<K> ops::Neg for Vector<K>
+where
+    K: FieldBound,
+{
+    type Output = Self;
+    fn neg(self) -> Self {
+        let mut v = self;
+
+        for k in &mut v {
+            *k = -k.clone();
+        }
+
+        v
+    }
+}
 
 impl<K> ops::AddAssign<&Self> for Vector<K>
 where
@@ -157,7 +181,30 @@ where
     }
 }
 
-impl<K: FieldBound> FieldBound for Vector<K> {}
+impl<K> FieldBound for Vector<K>
+where
+    K: FieldBound,
+{
+    fn abs(&self) -> Self {
+        let mut v = self.clone();
+
+        for k in &mut v {
+            *k = k.sqrt();
+        }
+
+        v
+    }
+
+    fn sqrt(&self) -> Self {
+        let mut v = self.clone();
+
+        for k in &mut v {
+            *k = k.sqrt();
+        }
+
+        v
+    }
+}
 
 // Independent MulAssign Implementation
 
@@ -205,18 +252,8 @@ impl<K: FieldBound> VectorSpace for Vector<K> {
     fn scl(&mut self, a: K) {
         *self *= a;
     }
-}
 
-impl<K: FieldBound> Vector<K> {
-    pub fn len(&self) -> usize {
-        self.size()
-    }
-
-    pub fn iter(&self) -> slice::Iter<'_, K> {
-        self.fields.iter()
-    }
-
-    pub fn sum(&self) -> K {
+    fn sum(&self) -> K {
         let mut sum: K = self.fields[0].clone();
 
         for i in 1..self.len() {
@@ -226,7 +263,11 @@ impl<K: FieldBound> Vector<K> {
         sum
     }
 
-    pub fn sqsum(&self) -> K {
+    fn sqsum(&self) -> K {
+        if self.size() == 0 {
+            panic!("Cannot comput squared sum of a vector of size 0");
+        }
+
         let mut sqsum: K = self.fields[0].clone();
         sqsum *= &sqsum.clone();
 
@@ -239,84 +280,59 @@ impl<K: FieldBound> Vector<K> {
         sqsum
     }
 
+    fn norm_inf(&self) -> K {
+        if self.size() == 0 {
+            panic!("Cannot find norm_inf of a vector of size 0");
+        }
+
+        let mut max = self.fields[0].abs();
+
+        for field in self {
+            if field.abs() > max {
+                max = field.abs();
+            }
+        }
+
+        max
+    }
+
+    fn norm_1(&self) -> K {
+        if self.size() == 0 {
+            panic!("Cannot compute norm_1 of a vector of size 0");
+        }
+
+        let mut sum = self.fields[0].clone().abs();
+
+        for i in 1..self.len() {
+            sum += &self.fields[i].abs();
+        }
+
+        sum
+    }
+
+    fn norm(&self) -> K {
+        self.sqsum().sqrt()
+    }
+}
+
+impl<K> Vector<K>
+where
+    K: FieldBound,
+{
+    pub fn len(&self) -> usize {
+        self.size()
+    }
+
+    pub fn iter(&self) -> slice::Iter<'_, K> {
+        self.fields.iter()
+    }
+
     pub fn dot(&self, v: &Vector<K>) -> K {
         let mut c = self.clone();
         c *= v;
         c.sum()
     }
 }
-
-// TODO: Consider moving previous functions into macros
-
-macro_rules! norm_impl {
-    ($($t:ty) +, float) => {
-        $(
-            impl Vector<$t> {
-                pub fn norm(&self) -> $t {
-                    self.sqsum().sqrt()
-                }
-
-                pub fn norm_inf(&self) -> $t {
-                    let mut max = self.fields[0].abs();
-
-                    for field in self {
-                        if field.abs() > max {
-                            max = field.abs();
-                        }
-                    }
-
-                    max
-                }
-            }
-        )+
-    };
-
-    ($($t:ty) +, integer) => {
-        $(
-            impl Vector<$t> {
-                pub fn norm(&self) -> $t {
-                    let sqsum = self.sqsum();
-                    (sqsum as f64).sqrt() as $t
-                }
-
-                pub fn norm_inf(&self) -> $t {
-                    let mut max = self.fields[0].abs();
-
-                    for field in self {
-                        if field.abs() > max {
-                            max = field.abs();
-                        }
-                    }
-
-                    max
-                }
-            }
-        )+
-    }
-}
-
-norm_impl!(f32 f64, float);
-norm_impl!(i8 i16 i32 i64 i128 isize, integer);
-
-macro_rules! norm_1_impl {
-    ($($t:ty) +) => {
-        $(
-            impl Vector<$t> {
-                pub fn norm_1(&self) -> $t {
-                    let mut sum = self.fields[0].clone().abs();
-
-                    for i in 1..self.len() {
-                        sum += self.fields[i].abs();
-                    }
-
-                    sum
-                }
-            }
-        )+
-    };
-}
-
-norm_1_impl!(f32 f64 i8 i16 i32 i64 i128 isize);
 
 // Function Declarations
 
@@ -354,11 +370,6 @@ where
     interp
 }
 
-/*
-   TODO: consider using num crate to be able to declare functions outside of
-         impl block
-*/
-/*
 #[allow(dead_code)]
 pub fn angle_cos<K>(u: &Vector<K>, v: &Vector<K>) -> K
 where
@@ -370,7 +381,6 @@ where
 
     acos
 }
-*/
 
 // Tests
 
@@ -487,8 +497,8 @@ mod tests {
 
     #[test]
     fn norm_1_test() {
-        let v1: Vector<i32> = vector![1, 2, 3];
-        let v2: Vector<i16> = vector![-1, -2];
+        let v1 = vector![1, 2, 3];
+        let v2 = vector![-1, -2];
 
         assert_eq!(v1.norm_1(), 6);
         assert_eq!(v2.norm_1(), 3);
@@ -496,7 +506,7 @@ mod tests {
 
     #[test]
     fn norm_test() {
-        let v1: Vector<f32> = vector![1., 2., 3.];
+        let v1 = vector![1., 2., 3.];
 
         assert!(v1.norm() > 3.740);
         assert!(v1.norm() < 3.742);
@@ -504,11 +514,21 @@ mod tests {
 
     #[test]
     fn norm_inf_test() {
-        let v1: Vector<i32> = vector![1, 2, 3];
-        let v2: Vector<i16> = vector![-1, -2];
+        let v1 = vector![1, 2, 3];
+        let v2 = vector![-1, -2];
 
         assert_eq!(v1.norm_inf(), 3);
         assert_eq!(v2.norm_inf(), 2);
+    }
+
+    #[test]
+    fn angle_cos_test() {
+        let v1 = vector![1., 2., 3.];
+        let v2 = vector![4., 5., 6.];
+        let acos = angle_cos(&v1, &v2);
+
+        assert!(acos > 0.974);
+        assert!(acos < 0.975);
     }
 
     #[test]
@@ -518,5 +538,12 @@ mod tests {
         let t2 = Vector::from(vec![0, -2, 1000, 45]);
 
         t1.force_eq_size(&t2);
+    }
+
+    #[test]
+    fn neg_test() {
+        let v1 = vector![1, 2, 3];
+
+        assert_eq!(-v1, vector![-1, -2, -3]);
     }
 }

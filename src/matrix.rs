@@ -9,7 +9,7 @@ use std::fmt;
 use std::ops;
 use std::slice;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Matrix<K: FieldBound> {
     vectors: Vector<Vector<K>>, // columns
 }
@@ -145,12 +145,6 @@ impl<'a, K: FieldBound> IntoIterator for &'a Matrix<K> {
     }
 }
 
-impl<K: FieldBound> PartialEq for Matrix<K> {
-    fn eq(&self, other: &Self) -> bool {
-        self.vectors == other.vectors
-    }
-}
-
 impl<K: fmt::Display + FieldBound> fmt::Display for Matrix<K> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // loop over the column and retrieve string repres. of each num
@@ -184,6 +178,15 @@ impl<K: fmt::Display + FieldBound> fmt::Display for Matrix<K> {
         }
 
         write!(f, "{}", str_disp)
+    }
+}
+
+impl<K> std::cmp::PartialOrd for Matrix<K>
+where
+    K: FieldBound,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.norm().partial_cmp(&other.norm())
     }
 }
 
@@ -260,6 +263,26 @@ impl<K: FieldBound> VectorSpace for Matrix<K> {
     fn scl(&mut self, a: K) {
         *self *= a;
     }
+
+    fn sum(&self) -> K {
+        self.vectors.sum().sum()
+    }
+
+    fn sqsum(&self) -> K {
+        self.vectors.sqsum().sum()
+    }
+
+    fn norm_inf(&self) -> K {
+        self.vectors.norm_inf().norm_inf()
+    }
+
+    fn norm_1(&self) -> K {
+        self.vectors.norm_1().sum()
+    }
+
+    fn norm(&self) -> K {
+        self.sqsum().sqrt()
+    }
 }
 
 impl<K: FieldBound> Matrix<K> {
@@ -274,6 +297,23 @@ impl<K: FieldBound> Matrix<K> {
             self.vectors[i] = Vector::from(row);
         }
     }
+}
+
+// Function Declarations
+
+#[allow(dead_code)]
+pub fn lerp<K>(u: &Matrix<K>, v: &Matrix<K>, t: K) -> Matrix<K>
+where
+    K: FieldBound,
+{
+    let mut slide = v.clone();
+    slide.sub(&u);
+    slide.scl(t);
+
+    let mut interp = u.clone();
+    interp.add(&slide);
+
+    interp
 }
 
 #[cfg(test)]
@@ -407,5 +447,15 @@ mod tests {
 
         assert_eq!(m1, matrix![1 * a1, 2 * a1, 3 * a1, 4 * a1]);
         assert_eq!(m2, matrix![[3 * a1], [4 * a1], [7 * a1]]);
+    }
+
+    #[test]
+    fn lerp_test() {
+        let m1 = matrix![[2., 1.], [3., 4.]];
+        let m2 = matrix![[20., 10.], [30., 40.]];
+        let interp = lerp(&m1, &m2, 0.5);
+
+        assert!(interp > matrix![[10.9, 5.4], [16.4, 21.9]]);
+        assert!(interp < matrix![[11.1, 5.6], [16.6, 22.1]]);
     }
 }
