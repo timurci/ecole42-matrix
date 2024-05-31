@@ -113,73 +113,53 @@ where
     }
 }
 
-impl<K> ops::AddAssign<&Self> for Vector<K>
-where
-    K: FieldBound, //+ for<'a> ops::AddAssign<&'a K>,
-{
-    fn add_assign(&mut self, rhs: &Self) {
-        self.force_eq_size(&rhs);
+macro_rules! impl_ops {
+    ($trait:ty, $fun:ident, $op:tt) => {
+        impl<K> $trait for Vector<K>
+        where
+            K: FieldBound,
+        {
+            type Output = Self;
 
-        let mut v_iter = rhs.into_iter();
-        for i in &mut self.fields {
-            match v_iter.next() {
-                Some(k_ref) => *i += k_ref,
-                None => {}
+            fn $fun(self, other: Self) -> Self {
+                let mut v = self;
+                v $op &other;
+                v
             }
         }
     }
 }
 
-impl<K> ops::SubAssign<&Self> for Vector<K>
-where
-    K: FieldBound,
-{
-    fn sub_assign(&mut self, rhs: &Self) {
-        self.force_eq_size(&rhs);
+impl_ops!(ops::Add, add, +=);
+impl_ops!(ops::Sub, sub, -=);
+impl_ops!(ops::Mul, mul, *=);
+impl_ops!(ops::Div, div, /=);
 
-        let mut v_iter = rhs.into_iter();
-        for i in &mut self.fields {
-            match v_iter.next() {
-                Some(k_ref) => *i -= k_ref,
-                None => {}
+macro_rules! impl_ops_assign {
+    ($trait:ty, $fun:ident, $op:tt) => {
+        impl<K> $trait for Vector<K>
+        where
+            K: FieldBound,
+        {
+            fn $fun(&mut self, rhs: &Self) {
+                self.force_eq_size(&rhs);
+
+                let mut v_iter = rhs.into_iter();
+                for i in &mut self.fields {
+                    match v_iter.next() {
+                        Some(k_ref) => *i $op k_ref,
+                        None => {}
+                    }
+                }
             }
         }
     }
 }
 
-impl<K> ops::MulAssign<&Self> for Vector<K>
-where
-    K: FieldBound,
-{
-    fn mul_assign(&mut self, rhs: &Self) {
-        self.force_eq_size(&rhs);
-
-        let mut v_iter = rhs.into_iter();
-        for i in &mut self.fields {
-            match v_iter.next() {
-                Some(k_ref) => *i *= k_ref,
-                None => {}
-            }
-        }
-    }
-}
-
-impl<K> ops::DivAssign<&Self> for Vector<K>
-where
-    K: FieldBound,
-{
-    fn div_assign(&mut self, rhs: &Self) {
-        self.force_eq_size(&rhs);
-
-        let mut v_iter = rhs.into_iter();
-        for i in &mut self.fields {
-            match v_iter.next() {
-                Some(k_ref) => *i *= k_ref,
-                None => {}
-            }
-        }
-    }
-}
+impl_ops_assign!(ops::AddAssign<&Self>, add_assign, +=);
+impl_ops_assign!(ops::SubAssign<&Self>, sub_assign, -=);
+impl_ops_assign!(ops::MulAssign<&Self>, mul_assign, *=);
+impl_ops_assign!(ops::DivAssign<&Self>, div_assign, /=);
 
 impl<K> FieldBound for Vector<K>
 where
@@ -327,6 +307,10 @@ where
         self.fields.iter()
     }
 
+    pub fn append(&mut self, k: K) {
+        self.fields.push(k);
+    }
+
     pub fn dot(&self, v: &Vector<K>) -> K {
         let mut c = self.clone();
         c *= v;
@@ -380,6 +364,22 @@ where
     acos /= &v.norm();
 
     acos
+}
+
+#[allow(dead_code)]
+pub fn cross_product<K>(u: &Vector<K>, v: &Vector<K>) -> Vector<K>
+where
+    K: FieldBound,
+{
+    if u.size() != 3 || v.size() != 3 {
+        panic!("vectors are not 3 dimensional");
+    }
+
+    vector![
+        (u[1].clone() * v[2].clone() - u[2].clone() * v[1].clone()), // + (a2 b3 - a3 b2)
+        (u[2].clone() * v[0].clone() - u[0].clone() * v[2].clone()), // - (a3 b1 - a1 b3)
+        (u[0].clone() * v[1].clone() - u[1].clone() * v[0].clone())  // + (a1 b2 - a2 b1)
+    ]
 }
 
 // Tests
@@ -529,6 +529,17 @@ mod tests {
 
         assert!(acos > 0.974);
         assert!(acos < 0.975);
+    }
+
+    #[test]
+    fn cross_product_test() {
+        let v1 = vector![1, 2, 3];
+        let v2 = vector![4, 5, 6];
+        let v3 = vector![4, 2, -3];
+        let v4 = vector![-2, -5, 16];
+
+        assert_eq!(cross_product(&v1, &v2), vector![-3, 6, -3]);
+        assert_eq!(cross_product(&v3, &v4), vector![17, -58, -16]);
     }
 
     #[test]

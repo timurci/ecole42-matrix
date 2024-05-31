@@ -12,11 +12,10 @@ pub trait FieldBound:
     + PartialEq
     + PartialOrd
     + ops::Neg<Output = Self>
-    //+ ops::Add
-    //+ ops::Sub
-    //+ ops::Mul
-    //+ ops::Div
-    //+ ops::Neg
+    + ops::Add<Output = Self>
+    + ops::Sub<Output = Self>
+    + ops::Mul<Output = Self>
+    + ops::Div<Output = Self>
     //+ ops::AddAssign
     //+ ops::SubAssign
     //+ ops::MulAssign
@@ -93,6 +92,23 @@ impl Dimension {
         match self {
             Dimension::D1(_) => None,
             Dimension::D2(d) => Some(d),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn inv_eq(&self, other: &Self) -> bool {
+        match self {
+            Dimension::D1(_) => false,
+            Dimension::D2(d2_self) => match other {
+                Dimension::D1(_) => false,
+                Dimension::D2(d2_other) => {
+                    if d2_self.rows == d2_other.cols && d2_self.cols == d2_other.rows {
+                        true
+                    } else {
+                        false
+                    }
+                }
+            },
         }
     }
 }
@@ -194,3 +210,21 @@ pub trait VectorSpace {
 
 pub mod matrix;
 pub mod vector;
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn dimension_inv_eq_test() {
+        let d2_1 = Dimension::D2(D2 { rows: 2, cols: 3 });
+        let d2_2 = Dimension::D2(D2 { rows: 3, cols: 2 });
+
+        assert!(d2_1.inv_eq(&d2_2));
+
+        let d1_1 = Dimension::D1(D1 { length: 2 });
+
+        assert!(!d1_1.inv_eq(&d2_2));
+    }
+}

@@ -3,6 +3,7 @@ use super::FieldBound;
 use super::VectorSpace;
 use super::D2;
 
+use super::vector::vector;
 use super::vector::Vector;
 
 use std::fmt;
@@ -192,30 +193,37 @@ where
 
 // MathAssign Implementations
 
-impl<K: FieldBound> ops::AddAssign<&Self> for Matrix<K> {
-    fn add_assign(&mut self, rhs: &Self) {
-        self.force_eq_shape(&rhs);
+macro_rules! impl_ops_assign {
+    ($trait:ty, $fun:ident, $op:tt) => {
+        impl<K> $trait for Matrix<K>
+        where
+            K: FieldBound
+        {
+            fn $fun(&mut self, rhs: &Self) {
+                self.force_eq_shape(&rhs);
 
-        let mut m_iter = rhs.into_iter();
-        for col in &mut self.vectors {
-            match m_iter.next() {
-                Some(v_ref) => *col += v_ref,
-                None => {}
+                let mut m_iter = rhs.into_iter();
+                for col in &mut self.vectors {
+                    match m_iter.next() {
+                        Some(v_ref) => *col $op v_ref,
+                        None => {}
+                    }
+                }
             }
         }
     }
 }
 
-impl<K: FieldBound> ops::SubAssign<&Self> for Matrix<K> {
-    fn sub_assign(&mut self, rhs: &Self) {
-        self.force_eq_shape(&rhs);
+impl_ops_assign!(ops::AddAssign<&Self>, add_assign, +=);
+impl_ops_assign!(ops::SubAssign<&Self>, sub_assign, -=);
+impl_ops_assign!(ops::MulAssign<&Self>, mul_assign, *=);
+impl_ops_assign!(ops::DivAssign<&Self>, div_assign, /=);
 
-        let mut m_iter = rhs.into_iter();
+impl<K: FieldBound> ops::MulAssign<&Vector<K>> for Matrix<K> {
+    // Column-wise multiplication
+    fn mul_assign(&mut self, rhs: &Vector<K>) {
         for col in &mut self.vectors {
-            match m_iter.next() {
-                Some(v_ref) => *col -= v_ref,
-                None => {}
-            }
+            *col *= rhs;
         }
     }
 }
@@ -296,6 +304,74 @@ impl<K: FieldBound> Matrix<K> {
             }
             self.vectors[i] = Vector::from(row);
         }
+    }
+
+    pub fn append_col(&mut self, v: Vector<K>) {
+        self.vectors.append(v);
+    }
+
+    pub fn col_sum(&self) -> Vector<K>
+    where
+        K: FieldBound,
+    {
+        if self.size() == 0 {
+            panic!("Cannot comput col_sum on an empty matrix");
+        }
+
+        let k_init = self.vectors[0][0].clone();
+        let mut col_sums = vector![k_init; self.vectors.len()];
+
+        for i in 0..self.vectors.len() {
+            col_sums[i] = self.vectors[i].sum();
+        }
+
+        col_sums
+    }
+
+    pub fn mul_vec(&self, v: &Vector<K>) -> Vector<K>
+    where
+        K: FieldBound,
+    {
+        let mut m = self.clone();
+        m.transpose();
+        //ops::MulAssign::mul_assign(self, v); // Cannot use self *= v ?
+        m *= v;
+        m.col_sum()
+    }
+
+    pub fn mul_mat(&self, m: &Matrix<K>) -> Matrix<K>
+    where
+        K: FieldBound,
+    {
+        if self.size() == 0 || m.size() == 0 {
+            panic!("cannot compute matrix multiplication of an empty matrix");
+        }
+
+        let sh_m = m.shape().d2().unwrap();
+        let sh_self = self.shape().d2().unwrap();
+
+        if sh_self.cols != sh_m.rows {
+            panic!("matrices are incompatible for matrix multiplication");
+        }
+
+        let k_init = self.vectors[0][0].clone();
+        let inv_n_row = sh_m.cols;
+        let inv_n_col = sh_self.rows;
+        let mut result = matrix![k_init; inv_n_row, inv_n_col];
+
+        let mut cl = self.clone();
+        cl.transpose();
+
+        for j1 in 0..inv_n_col {
+            // itr over cols of cl
+            for j2 in 0..inv_n_row {
+                // itr over cols of m
+                result.vectors[j1][j2] = cl.vectors[j1].dot(&m.vectors[j2]);
+            }
+        }
+
+        result.transpose();
+        result
     }
 }
 
@@ -409,6 +485,13 @@ mod tests {
     }
 
     #[test]
+    fn col_sum_test() {
+        let m = matrix!([1, 2, 3], [4, 5, 6]);
+
+        assert_eq!(m.col_sum(), vector![5, 7, 9]);
+    }
+
+    #[test]
     fn add_test() {
         let mut m1 = matrix![1, 2, 3, 4];
         let mut m2 = matrix![[3], [4], [7]];
@@ -457,5 +540,28 @@ mod tests {
 
         assert!(interp > matrix![[10.9, 5.4], [16.4, 21.9]]);
         assert!(interp < matrix![[11.1, 5.6], [16.6, 22.1]]);
+    }
+
+    #[test]
+    fn mul_vec_test() {
+        let u = matrix![[2, -2], [-2, 2]];
+
+        assert_eq!(u.mul_vec(&vector![4, 2]), vector![4, -4]);
+    }
+
+    #[test]
+    fn mul_mat_test() {
+        let u = matrix![[3, -5], [6, 8]];
+        let v = matrix![[2, 1], [4, 2]];
+
+        assert_eq!(u.mul_mat(&v), matrix![[-14, -7], [44, 22]]);
+
+        let u = matrix![[1, 2, 3], [4, 5, 6]];
+        let v = matrix![[7, 8, 9, 10], [11, 12, 13, 14], [15, 16, 17, 18]];
+
+        assert_eq!(
+            u.mul_mat(&v),
+            matrix![[74, 80, 86, 92], [173, 188, 203, 218]]
+        );
     }
 }
