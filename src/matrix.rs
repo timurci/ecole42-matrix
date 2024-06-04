@@ -54,7 +54,7 @@ macro_rules! matrix {
                 )
             );
 
-            m.transpose();
+            m.transpose_mut();
             m
         }
     };
@@ -106,7 +106,7 @@ impl<K: FieldBound> From<&[K]> for Matrix<K> {
                 let mut m = Self {
                     vectors: Vector::from(columns),
                 };
-                m.transpose();
+                m.transpose_mut();
                 m
             }
             None => {
@@ -125,7 +125,7 @@ impl<K: FieldBound> From<&[Vector<K>]> for Matrix<K> {
         let mut m = Self {
             vectors: Vector::from(content),
         };
-        m.transpose();
+        m.transpose_mut();
 
         m
     }
@@ -294,7 +294,7 @@ impl<K: FieldBound> VectorSpace for Matrix<K> {
 }
 
 impl<K: FieldBound> Matrix<K> {
-    pub fn transpose(&mut self) {
+    pub fn transpose_mut(&mut self) {
         let pivot = self.vectors.clone();
         self.vectors = Vector::from(vec![pivot[0].clone(); pivot[0].size()]);
         for i in 0..pivot[0].size() {
@@ -306,18 +306,74 @@ impl<K: FieldBound> Matrix<K> {
         }
     }
 
+    pub fn transpose(&self) -> Self {
+        let mut m = self.clone();
+        m.transpose_mut();
+        m
+    }
+
+    pub fn is_square(&self) -> bool {
+        let shape = self.shape().d2().unwrap();
+        shape.rows == shape.cols
+    }
+
     pub fn append_col(&mut self, v: Vector<K>) {
+        if self.size() != 0 && self.vectors[0].len() != v.len() {
+            panic!("cannot append incompatible column");
+        }
         self.vectors.append(v);
+    }
+
+    fn n_rows(&self) -> usize {
+        if self.size() == 0 {
+            return 0;
+        } else {
+            return self.vectors[0].len();
+        }
+    }
+
+    fn n_cols(&self) -> usize {
+        self.vectors.len()
+    }
+
+    #[allow(dead_code)]
+    fn swap_cols(&mut self, inx1: usize, inx2: usize) {
+        let cl1 = self.vectors[inx1].clone();
+        self.vectors[inx1] = self.vectors[inx2].clone();
+        self.vectors[inx2] = cl1;
+    }
+
+    fn swap_rows(&mut self, inx1: usize, inx2: usize) {
+        let cl1 = self.clone_row(inx1);
+        self.set_row(inx1, &self.clone_row(inx2));
+        self.set_row(inx2, &cl1);
+    }
+
+    fn clone_row(&self, inx: usize) -> Vector<K> {
+        let k_init = self.vectors[0][inx].clone();
+        let mut cl = vector![k_init; self.vectors.len()];
+
+        for i in 1..self.vectors.len() {
+            cl[i] = self.vectors[i][inx].clone();
+        }
+
+        cl
+    }
+
+    fn set_row(&mut self, inx: usize, v: &Vector<K>) {
+        if v.len() != self.vectors.len() {
+            panic!("incorrect row size");
+        }
+
+        for i in 0..self.vectors.len() {
+            self.vectors[i][inx] = v[i].clone();
+        }
     }
 
     pub fn col_sum(&self) -> Vector<K>
     where
         K: FieldBound,
     {
-        if self.size() == 0 {
-            panic!("Cannot comput col_sum on an empty matrix");
-        }
-
         let k_init = self.vectors[0][0].clone();
         let mut col_sums = vector![k_init; self.vectors.len()];
 
@@ -333,7 +389,7 @@ impl<K: FieldBound> Matrix<K> {
         K: FieldBound,
     {
         let mut m = self.clone();
-        m.transpose();
+        m.transpose_mut();
         //ops::MulAssign::mul_assign(self, v); // Cannot use self *= v ?
         m *= v;
         m.col_sum()
@@ -360,7 +416,7 @@ impl<K: FieldBound> Matrix<K> {
         let mut result = matrix![k_init; inv_n_row, inv_n_col];
 
         let mut cl = self.clone();
-        cl.transpose();
+        cl.transpose_mut();
 
         for j1 in 0..inv_n_col {
             // itr over cols of cl
@@ -370,8 +426,123 @@ impl<K: FieldBound> Matrix<K> {
             }
         }
 
-        result.transpose();
+        result.transpose_mut();
         result
+    }
+
+    pub fn trace(&self) -> K {
+        if !self.is_square() {
+            panic!("cannot compute trace of a non-square matrix");
+        }
+
+        if self.size() == 0 {
+            panic!("cannot compute trace of an empty matrix");
+        }
+
+        let mut sum = self.vectors[0][0].clone();
+
+        for i in 1..self.vectors.len() {
+            sum += &self.vectors[i][i];
+        }
+
+        sum
+    }
+
+    pub fn row_echelon(&self) -> Matrix<K> {
+        // Return reduced row-echelon form
+
+        fn find_nonzero_from<K: FieldBound>(col: &Vector<K>, start: usize) -> usize {
+            for i in start..col.len() {
+                if !col[i].is_zero() {
+                    return i;
+                }
+            }
+            start
+        }
+
+        fn div_row_from<K: FieldBound>(m: &mut Matrix<K>, i: usize, from: usize, div: K) {
+            for j in from..m.n_cols() {
+                m.vectors[j][i] /= &div;
+            }
+        }
+
+        fn clone_row_from<K: FieldBound>(m: &Matrix<K>, i: usize, from: usize) -> Vector<K> {
+            let len = m.vectors.len() - from;
+            let mut v = vector![m.vectors[from][i].clone(); len];
+
+            let mut inner_count: usize = 1;
+            for j in (from + 1)..m.vectors.len() {
+                v[inner_count] = m.vectors[j][i].clone();
+                inner_count += 1;
+            }
+
+            v
+        }
+
+        fn sub_row_from<K>(m: &mut Matrix<K>, i: usize, from: usize, v: Vector<K>)
+        where
+            K: FieldBound,
+        {
+            let mut vec_count = 0;
+            for j in from..m.n_cols() {
+                m.vectors[j][i] -= &v[vec_count];
+                vec_count += 1;
+            }
+        }
+
+        fn neutralize_rows_until<K>(m: &mut Matrix<K>, until: usize, at_col: usize, v: &Vector<K>)
+        where
+            K: FieldBound,
+        {
+            for i in 0..until {
+                if m.vectors[at_col][i].is_zero() {
+                    continue;
+                }
+
+                let mut v_scl = v.clone();
+                v_scl *= &m.vectors[at_col][i];
+
+                sub_row_from(m, i, at_col, v_scl);
+            }
+        }
+
+        let mut rech = self.clone();
+
+        let mut i = 0;
+        for j in 0..rech.n_cols() {
+            // iterate over columns
+            let arg = find_nonzero_from(&rech.vectors[j], i);
+
+            if arg != i {
+                rech.swap_rows(arg, i);
+            }
+
+            if rech.vectors[j][i].is_zero() {
+                continue;
+            }
+
+            let f = rech.vectors[j][i].clone();
+            div_row_from(&mut rech, i, j, f);
+
+            // =================================================
+            // Backtracing for reduced row-echelon form
+            let partial_row_i = clone_row_from(&rech, i, j);
+            neutralize_rows_until(&mut rech, i, j, &partial_row_i);
+            // =================================================
+
+            if i == rech.n_rows() - 1 {
+                break;
+            }
+
+            for i_bp in (i + 1)..rech.n_rows() {
+                let f = rech.vectors[j][i_bp].clone();
+                let mut scl_part_row_i = partial_row_i.clone();
+                scl_part_row_i *= f;
+                sub_row_from(&mut rech, i_bp, j, scl_part_row_i);
+            }
+            i += 1;
+        }
+        rech
     }
 }
 
@@ -456,8 +627,8 @@ mod tests {
         let mut m1 = Matrix::from([1, 2, 3, 4].as_slice());
         let mut m2 = Matrix::from([1, 2, 3, 4, 5, 6, 7, 8, 9].as_slice());
 
-        m1.transpose();
-        m2.transpose();
+        m1.transpose_mut();
+        m2.transpose_mut();
 
         assert_eq!(m1, Matrix::from([1, 3, 2, 4].as_slice()));
         assert_eq!(m2, Matrix::from([1, 4, 7, 2, 5, 8, 3, 6, 9].as_slice()));
@@ -489,6 +660,27 @@ mod tests {
         let m = matrix!([1, 2, 3], [4, 5, 6]);
 
         assert_eq!(m.col_sum(), vector![5, 7, 9]);
+    }
+
+    #[test]
+    fn swap_cols_test() {
+        let mut m = matrix![[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+        m.swap_cols(0, 2);
+        assert_eq!(m, matrix![[3, 2, 1], [6, 5, 4], [9, 8, 7]]);
+    }
+
+    #[test]
+    fn set_row_test() {
+        let mut m = matrix![[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+        m.set_row(1, &vector![40, 50, 60]);
+        assert_eq!(m, matrix![[1, 2, 3], [40, 50, 60], [7, 8, 9]]);
+    }
+
+    #[test]
+    fn swap_rows_test() {
+        let mut m = matrix![[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+        m.swap_rows(0, 2);
+        assert_eq!(m, matrix![[7, 8, 9], [4, 5, 6], [1, 2, 3]]);
     }
 
     #[test]
@@ -563,5 +755,12 @@ mod tests {
             u.mul_mat(&v),
             matrix![[74, 80, 86, 92], [173, 188, 203, 218]]
         );
+    }
+
+    #[test]
+    fn trace_test() {
+        let m = matrix![[2, -5, 0], [4, 3, 7], [-2, 3, 4]];
+
+        assert_eq!(m.trace(), 9);
     }
 }

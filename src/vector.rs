@@ -165,6 +165,10 @@ impl<K> FieldBound for Vector<K>
 where
     K: FieldBound,
 {
+    // const ZERO: Self = Self { fields: Vec::from([K::ZERO].as_slice())};
+
+    const ZERO: Self = Self { fields: vec![] };
+
     fn abs(&self) -> Self {
         let mut v = self.clone();
 
@@ -183,6 +187,10 @@ where
         }
 
         v
+    }
+
+    fn is_zero(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -205,6 +213,26 @@ where
 {
     fn mul_assign(&mut self, rhs: K) {
         self.mul_assign(&rhs);
+    }
+}
+
+impl<K> ops::DivAssign<&K> for Vector<K>
+where
+    K: FieldBound,
+{
+    fn div_assign(&mut self, rhs: &K) {
+        for i in &mut self.fields {
+            *i /= rhs;
+        }
+    }
+}
+
+impl<K> ops::DivAssign<K> for Vector<K>
+where
+    K: FieldBound,
+{
+    fn div_assign(&mut self, rhs: K) {
+        self.div_assign(&rhs);
     }
 }
 

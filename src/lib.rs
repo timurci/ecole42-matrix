@@ -11,6 +11,8 @@ pub trait FieldBound:
     Clone
     + PartialEq
     + PartialOrd
+    + fmt::Debug
+    + fmt::Display
     + ops::Neg<Output = Self>
     + ops::Add<Output = Self>
     + ops::Sub<Output = Self>
@@ -25,20 +27,28 @@ pub trait FieldBound:
     + for <'a> ops::MulAssign<&'a Self>
     + for <'a> ops::DivAssign<&'a Self>
 {
+    const ZERO: Self;
     fn abs(&self) -> Self;
     fn sqrt(&self) -> Self;
+    fn is_zero(&self) -> bool;
 }
 
 macro_rules! impl_fbound_required {
     ($($t:ty) +, float) => {
         $(
             impl FieldBound for $t {
+                const ZERO: Self = 0.0;
+
                 fn abs(&self) -> Self {
                     Signed::abs(self)
                 }
 
                 fn sqrt(&self) -> Self {
                     Float::sqrt(self.clone())
+                }
+
+                fn is_zero(&self) -> bool {
+                    Signed::abs(self) <= 0e-10
                 }
             }
         )+
@@ -47,12 +57,18 @@ macro_rules! impl_fbound_required {
     ($($t:ty) +, integer) => {
         $(
             impl FieldBound for $t {
+                const ZERO: Self = 0;
+
                 fn abs(&self) -> Self {
                     Signed::abs(self)
                 }
 
                 fn  sqrt(&self) -> Self {
                     Roots::sqrt(self)
+                }
+
+                fn is_zero(&self) -> bool {
+                    self.clone() == Self::ZERO
                 }
             }
         )+

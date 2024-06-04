@@ -31,4 +31,14 @@ fn main() {
 
     m.scl(-0.5);
     println!("m:\n{m}\nscl: -0.5");
+
+    let m2 = matrix![
+        [8., 5., -2., 4., 28.],
+        [4., 2.5, 20., 4., -4.],
+        [8., 5., 1., 4., 17.]
+    ];
+
+    println!("m2:\n{}", m2);
+
+    println!("m2 row echelon:\n{}", m2.row_echelon());
 }
