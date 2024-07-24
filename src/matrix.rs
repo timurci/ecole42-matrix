@@ -6,6 +6,7 @@ use super::D2;
 use super::vector::vector;
 use super::vector::Vector;
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::ops;
 use std::slice;
@@ -544,6 +545,72 @@ impl<K: FieldBound> Matrix<K> {
         }
         rech
     }
+
+    fn discard(&self, row_index: usize, col_index: usize) -> Matrix<K> {
+        let sh_self = self.shape().d2().unwrap();
+        let mut m = matrix![self.vectors[0][0].clone(); sh_self.rows - 1, sh_self.cols - 1];
+        let sh_m = m.shape().d2().unwrap();
+
+        let mut outer_i: usize = 0;
+        for i in 0..sh_m.rows {
+            if i == row_index {
+                outer_i += 1;
+            }
+
+            let mut outer_j: usize = 0;
+
+            for j in 0..sh_m.cols {
+                if j == col_index {
+                    outer_j += 1;
+                }
+
+                m.vectors[j][i] = self.vectors[outer_j][outer_i].clone();
+
+                outer_j += 1;
+            }
+            outer_i += 1;
+        }
+
+        return m;
+    }
+
+    fn determinant_sq_lt2(&self) -> K {
+        match self.shape().d2().unwrap() {
+            D2 { rows: 2, cols: 2 } => {
+                return self.vectors[0][0].clone() * self.vectors[1][1].clone()
+                    - self.vectors[0][1].clone() * self.vectors[1][0].clone()
+            }
+            D2 { rows: 1, cols: 1 } => return self.vectors[0][0].clone(),
+            _ => panic!("incorrect dimensions"),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn determinant(&self) -> K {
+        if !self.is_square() {
+            panic!("determinant is not implemented for non-square matrices");
+        }
+        match self.shape().d2().unwrap().rows.cmp(&2) {
+            Ordering::Less => return self.determinant_sq_lt2(),
+            Ordering::Equal => return self.determinant_sq_lt2(),
+            Ordering::Greater => {
+                let mut det: K = self.vectors[0][0].clone();
+
+                for j in 0..self.vectors.len() {
+                    let l_det = self.vectors[j][0].clone() * self.discard(0, j).determinant();
+                    if j == 0 {
+                        det = l_det;
+                    } else if j % 2 == 0 {
+                        det += &l_det;
+                    } else {
+                        det -= &l_det;
+                    }
+                }
+
+                return det;
+            }
+        }
+    }
 }
 
 // Function Declarations
@@ -762,5 +829,40 @@ mod tests {
         let m = matrix![[2, -5, 0], [4, 3, 7], [-2, 3, 4]];
 
         assert_eq!(m.trace(), 9);
+    }
+
+    #[test]
+    fn discard_test() {
+        let m = matrix![[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+
+        assert_eq!(m.discard(0, 0), matrix![[5, 6], [8, 9]]);
+        assert_eq!(m.discard(0, 1), matrix![[4, 6], [7, 9]]);
+        assert_eq!(m.discard(1, 2), matrix![[1, 2], [7, 8]]);
+    }
+
+    #[test]
+    fn determinant_sq_lt2_test() {
+        let m1 = matrix![[2, 7], [5, 9]];
+        let m2 = matrix![-3];
+
+        assert_eq!(m1.determinant_sq_lt2(), -17);
+        assert_eq!(m2.determinant_sq_lt2(), -3);
+    }
+
+    #[test]
+    fn determinant_test() {
+        let m2 = matrix![[2, 7], [5, 9]];
+        let m1 = matrix![-3];
+        let m3 = matrix![[1, 22, 3], [30, 51, 16], [7, -8, 5]];
+        let m4 = matrix![
+            [1, 40, 3, 2],
+            [5, 8, 7, 9],
+            [19, -7, 60, 4],
+            [-13, 12, 17, 24]
+        ];
+        assert_eq!(m1.determinant(), -3);
+        assert_eq!(m2.determinant(), -17);
+        assert_eq!(m3.determinant(), -2244);
+        assert_eq!(m4.determinant(), -511916);
     }
 }
