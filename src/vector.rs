@@ -344,6 +344,10 @@ where
         c *= v;
         c.sum()
     }
+
+    pub fn slice(&self, range: ops::Range<usize>) -> &[K] {
+        &self.fields[range]
+    }
 }
 
 // Function Declarations
@@ -584,5 +588,13 @@ mod tests {
         let v1 = vector![1, 2, 3];
 
         assert_eq!(-v1, vector![-1, -2, -3]);
+    }
+
+    #[test]
+    fn slice_test() {
+        let v = vector![10, 11, 12, 13, 14];
+
+        assert_eq!(v.slice(0..2), &[10, 11]);
+        assert_eq!(v.slice(2..5), &[12, 13, 14]);
     }
 }

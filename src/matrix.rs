@@ -11,9 +11,28 @@ use std::fmt;
 use std::ops;
 use std::slice;
 
+use std::error::Error;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Matrix<K: FieldBound> {
     vectors: Vector<Vector<K>>, // columns
+}
+
+#[derive(Debug)]
+pub struct InverseNotFound {}
+
+impl fmt::Display for InverseNotFound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", "inverse is not found")
+    }
+}
+
+impl Error for InverseNotFound {}
+
+impl InverseNotFound {
+    fn new() -> Self {
+        InverseNotFound {}
+    }
 }
 
 fn perfect_square_root(length: usize) -> Option<usize> {
@@ -643,6 +662,26 @@ impl<K: FieldBound> Matrix<K> {
 
         self == &identity
     }
+
+    pub fn inverse(&self) -> Result<Matrix<K>, InverseNotFound> {
+        let mut combined = self.clone();
+
+        combined.bind_cols(self.identity());
+
+        let reduced = combined.row_echelon();
+        let first_half = Matrix::from(Vector::from(reduced.vectors.slice(0..self.vectors.len())));
+        let second_half = Matrix::from(Vector::from(
+            reduced
+                .vectors
+                .slice(self.vectors.len()..combined.vectors.len()),
+        ));
+
+        if first_half.is_identity() {
+            Ok(second_half)
+        } else {
+            Err(InverseNotFound::new())
+        }
+    }
 }
 
 // Function Declarations
@@ -917,5 +956,32 @@ mod tests {
         assert_eq!(m1.identity(), matrix![[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
         assert_eq!(m2.identity(), matrix![[1, 0], [0, 1]]);
         assert!(m3.identity().is_identity());
+    }
+
+    #[test]
+    fn inverse_test() {
+        let m = matrix![[8., 5., -2.], [4., 7., 20.], [7., 6., 1.]];
+
+        let inv = m.inverse().unwrap();
+
+        println!("{m}");
+        println!("{inv}");
+
+        assert!(
+            inv >= matrix![
+                [0.648, 0.096, -0.656],
+                [-0.782, -0.127, 0.964],
+                [0.142, 0.073, -0.207]
+            ]
+        );
+
+        // failure ?
+        assert!(
+            inv <= matrix![
+                [0.650, 0.098, -0.654],
+                [-0.780, -0.125, 0.966],
+                [0.144, 0.075, -0.205]
+            ]
+        );
     }
 }
