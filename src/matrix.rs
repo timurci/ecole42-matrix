@@ -325,6 +325,12 @@ impl<K: FieldBound> Matrix<K> {
         self.vectors.append(v);
     }
 
+    pub fn bind_cols(&mut self, m: Matrix<K>) {
+        for col in &m {
+            self.append_col(col.clone());
+        }
+    }
+
     fn n_rows(&self) -> usize {
         if self.size() == 0 {
             return 0;
@@ -585,8 +591,7 @@ impl<K: FieldBound> Matrix<K> {
         }
     }
 
-    #[allow(dead_code)]
-    fn determinant(&self) -> K {
+    pub fn determinant(&self) -> K {
         if !self.is_square() {
             panic!("determinant is not implemented for non-square matrices");
         }
@@ -610,6 +615,33 @@ impl<K: FieldBound> Matrix<K> {
                 return det;
             }
         }
+    }
+
+    pub fn identity(&self) -> Matrix<K> {
+        if !self.is_square() {
+            panic!("identity is not applicable for a non-square matrix");
+        }
+
+        let mut m = self.clone();
+
+        for j in 0..self.vectors.len() {
+            for i in 0..self.vectors.len() {
+                let val = m.vectors[j][i].clone();
+                if j == i {
+                    m.vectors[j][i] /= &val;
+                } else {
+                    m.vectors[j][i] -= &val;
+                }
+            }
+        }
+
+        m
+    }
+
+    pub fn is_identity(&self) -> bool {
+        let identity = self.identity();
+
+        self == &identity
     }
 }
 
@@ -864,5 +896,26 @@ mod tests {
         assert_eq!(m2.determinant(), -17);
         assert_eq!(m3.determinant(), -2244);
         assert_eq!(m4.determinant(), -511916);
+    }
+
+    #[test]
+    fn bind_cols_test() {
+        let mut m1 = matrix![[1, 2, 3], [4, 5, 6]];
+        let m2 = matrix![[7, 8, 9], [10, 11, 12]];
+
+        m1.bind_cols(m2);
+
+        assert_eq!(m1, matrix![[1, 2, 3, 7, 8, 9], [4, 5, 6, 10, 11, 12]]);
+    }
+
+    #[test]
+    fn identity_test() {
+        let m1 = matrix![[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+        let m2 = matrix![[1, 2], [3, 4]];
+        let m3 = matrix![[1.5, 2.5, 3.5], [4.5, 5.5, 6.5], [7.5, 8.5, 9.5]];
+
+        assert_eq!(m1.identity(), matrix![[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+        assert_eq!(m2.identity(), matrix![[1, 0], [0, 1]]);
+        assert!(m3.identity().is_identity());
     }
 }
