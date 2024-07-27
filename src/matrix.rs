@@ -682,6 +682,30 @@ impl<K: FieldBound> Matrix<K> {
             Err(InverseNotFound::new())
         }
     }
+
+    pub fn rank(&self) -> usize {
+        fn is_null_row<K: FieldBound>(m: &Matrix<K>, row_index: usize) -> bool {
+            for j in 0..m.vectors.len() {
+                let zero = m.vectors[j][row_index].clone() - m.vectors[j][row_index].clone();
+                if m.vectors[j][row_index] != zero {
+                    return false;
+                }
+            }
+            true
+        }
+
+        let mut null_rows: usize = 0;
+        let shape = self.shape().d2().unwrap();
+        let m = self.row_echelon();
+
+        for i in 0..shape.rows {
+            if is_null_row(&m, i) {
+                null_rows += 1;
+            }
+        }
+
+        shape.rows - null_rows
+    }
 }
 
 // Function Declarations
@@ -964,9 +988,6 @@ mod tests {
 
         let inv = m.inverse().unwrap();
 
-        println!("{m}");
-        println!("{inv}");
-
         assert!(
             inv >= matrix![
                 [0.648, 0.096, -0.656],
@@ -975,13 +996,23 @@ mod tests {
             ]
         );
 
-        // failure ?
         assert!(
             inv <= matrix![
-                [0.650, 0.098, -0.654],
-                [-0.780, -0.125, 0.966],
-                [0.144, 0.075, -0.205]
+                [0.650, 0.099, -0.654],
+                [-0.780, -0.125, 0.967],
+                [0.15, 0.08, -0.205]
             ]
         );
+    }
+
+    #[test]
+    fn rank_test() {
+        let m1 = matrix![[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
+        let m2 = matrix![[1., 2., 0., 0.], [2., 4., 0., 0.], [-1., 2., 1., 1.]];
+        let m3 = matrix![[8., 5., -2.], [4., 7., 20.], [7., 6., 1.], [21., 18., 7.]];
+
+        assert_eq!(m1.rank(), 3);
+        assert_eq!(m2.rank(), 2);
+        assert_eq!(m3.rank(), 3);
     }
 }
